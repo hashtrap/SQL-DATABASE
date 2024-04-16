@@ -1,0 +1,393 @@
+Querry1: Display the quantity of winter products during the month of january  
+in descending order
+
+select p.product_id product_id ,p.name name,sum(i.total_quantity) total_quantity
+from products p,items i,orders o
+where p.product_id=i.product_id and o.order_id=i.order_id and p.collection like 'Winter%' 
+and to_char(o.order_date,'MM')='01'
+group by p.product_id, p.name
+order by sum(i.total_quantity) desc
+
+Querry 2: Display employee fullname,birthdate,position and collection they workes on
+
+select a.employee_fullname,e.birth_date,a.position,a.collection
+from employees e,assignments a
+where e.employee_id=a.employee_id
+order by e.birth_date
+
+Querry 3: Display the most populated positions
+select count(assignment_id),task
+from assignments
+group by task
+order by 1
+
+Querry 4: Display the shiped orders where customers paid with their preferred payment type
+
+select o.order_id order_ID, c.preferred_payment prefered_payment, o.pay_type payment_type
+, o.order_status Order_status
+from orders o join customers c
+on o.customer_id = c.customer_id
+and c.preferred_payment = o.pay_type
+and o.order_status = 'Shipped'
+order by o.order_id;
+
+Querry 5: Display info for the customer who had the most amount shipped on the first shipment
+
+create or replace view private as
+select quantity_firstshipment quantity,order_id
+from items
+order by quantity_firstshipment desc
+
+select c.*
+from customers c,orders o
+where o.customer_id=c.customer_id
+and o.order_id=(
+    select order_id
+    from private
+    where rownum=1
+)
+
+Querry 6: Display the quantity of all the shipped items ,order by date
+
+select i.order_id||i.product_id orders,o.order_date dates,i.total_quantity
+from orders o,items i
+where o.order_id=i.order_id and o.order_status='Shipped'
+order by o.order_date
+
+Querry 7: Find the profit from products manufacturing for every customer area
+ and sort in descending order
+
+create or replace view profit_by_area as
+select c.area "Customer Area", sum((p.price-p.cost)*i.total_quantity) "Manufacturing Profit"
+from customers c join orders o
+on c.customer_id = o.customer_id
+join items i
+on o.order_id = i.order_id
+join products p
+on p.product_id = i.product_id
+group by c.area
+order by c.area desc
+
+select * 
+from profit_by_area 
+
+Querry 8: Find total profit from products
+
+select sum("Manufacturing Profit") "Total Profits" 
+from profit_by_area;
+
+Querry 9: Find the status of orders where first shipment costs more than the second one
+,while it contains less quantity of products
+
+select o.order_status,count(i.order_id) "Shipments"
+from orders o,items i
+where i.order_id=o.order_id and i.quantity_firstshipment<i.quantity_secondshipment
+ and o.cost_firstshipment>o.cost_secondshipment and o.order_status='Shipped'
+ group by o.order_status
+
+Querry 10:Find the profit from products manufacturing for every payment type
+
+ create or replace view payment_profit as
+select o.pay_type "Payment Type", sum((p.price-p.cost)*i.total_quantity) "Manufacturing Profit"
+from customers c join orders o
+on c.customer_id = o.customer_id
+join items i
+on o.order_id = i.order_id
+join products p
+on p.product_id = i.product_id
+group by o.pay_type
+order by o.pay_type;
+
+select *
+ from payment_profit;
+
+Querry 11: Show the quantity of every product ordered
+
+ create or replace view view_1 as
+ select product_id, name
+ from products
+
+create or replace view view_2 as
+select product_id,sum(total_quantity) quantity
+from items
+group by product_id
+order by 1
+
+select sum(decode(a.name,'Shirt',b.quantity)) "Shirt",
+sum(decode(a.name,'Jacket',b.quantity)) "Jacket",
+sum(decode(a.name,'Shoes',b.quantity)) "Shoes",
+sum(decode(a.name,'Suits',b.quantity)) "Suits"
+from view_1 a,view_2 b
+where a.product_id=b.product_id
+
+Querry 12 Employee with id: MYZ040 has left the company,delete useless record
+
+create or replace procedure deletion(id_del in varchar2)
+is
+begin
+  delete  from assignments
+  where employee_id=id_del;
+  delete  from employees
+  where employee_id=id_del;
+end deletion;
+
+begin
+  deletion('MYZ040');
+end;
+
+Querry 13 check condition if what we insert into employees is null
+
+create or replace trigger emp_check_null
+before insert on employees
+for each row
+declare 
+  v_check_null number;
+begin
+ 
+    if :new.employee_title is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.employee_name is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.employee_surname is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.birth_date is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.address is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.phone_number is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.bonus is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    elsif :new.managers is null then
+       raise_application_error(-20003,'Null value detected,prohibited on this table');
+    end if;
+end;
+
+Querry 14 find the employee with the second lowest salary in the company working on a summer collection
+
+create or replace view is_summer as
+(
+    select s.*
+    from assignments s
+    where s.collection like 'Summer%'
+    
+    )
+
+select s.employee_id,s.employee_fullname,s.payment
+from is_summer s
+where 2=
+(
+    select count(distinct(s2.payment))
+    from is_summer s2
+    where s2.payment<=s.payment
+)
+
+Querry 15 find who is the top excecutive in the company and who are his employees
+
+declare 
+  number_of_emp number;
+  v_record employees%rowtype;
+  cursor top_manager is
+     select count(employee_id)
+     from employees
+     where managers =
+     (
+         select employee_id
+         from employees
+         where managers is null
+     );
+begin 
+  open top_manager;
+  loop
+   fetch top_manager into number_of_emp;
+
+   exit when top_manager%notfound;
+
+   select * into v_record
+  from employees
+  where managers is null;
+
+  DBMS_OUTPUT.PUT_LINE('Manager '||v_record.employee_name||' '||v_record.employee_surname||' with ID '||v_record.employee_id||' has '||number_of_emp||' employees under him');
+
+  end loop;
+  close top_manager;
+ 
+end;
+
+Querry 16 Display a report of employee id, employee full name and location for all employees who earn more than the average salary. 
+
+
+
+create or replace view salaries as (
+select a.employee_id emp_id, a.employee_fullname fullname, a.location location, a.payment + (a.payment*(e.bonus/100)) salary
+from assignments a
+join employees e 
+on (a.employee_id = e.employee_id)
+);
+
+select *
+from salaries
+where salary > 
+( 
+select avg(salary)  
+from salaries 
+);
+
+
+Querry 17. Modify the previous query to display information for employees who worked in assignments located in Paris. 
+
+select *
+from salaries
+where salary  > 
+( 
+select avg(salary)  
+from salaries 
+)
+and  location in 
+(
+select location 
+from salaries 
+where location = 'Paris'
+);
+
+Querry 18 Display Managers hierarchy
+select level, lpad(' ',LEVEL+1, '$') || employee_surname "Employee",
+employee_id, managers
+from employees
+start with managers is null
+connect by prior employee_id = managers
+order siblings by employee_surname;
+
+Querry 19 Show every relation between all employees in a path format.
+
+select sys_connect_by_path(employee_id||' '||employee_surname, '=>') Relations
+from employees
+start with managers is null
+connect by prior employee_id = managers;
+
+Querry 20 Show employees who aren't managers
+
+select employee_id||' '||employee_surname "Employees who are not managers"
+from employees
+where connect_by_isleaf=1
+start with managers is null
+connect by prior employee_id=managers;
+
+Querry 21 Calculate the profit per unit and display this information in the format:
+"Product Name with ID:XXX of Collection name gives a profit of x% per unit"
+
+declare
+   cursor find is
+     select *
+     from products;
+   profit number;
+   v_record products%rowtype;
+begin
+   open find;
+   loop
+   fetch find into v_record;
+   profit :=v_record.price-v_record.cost;
+   exit when find%notfound;
+   dbms_output.put_line('Product '|| v_record.name ||' with ID: '|| v_record.product_id || ' of collection: ' || v_record.collection ||' gives a profit of '|| profit || '$ per unit.');
+   end loop;
+   close find;
+end;
+
+Querry 22 create a trigger which logs error codes and when they happened for orders table
+
+create table error_log(
+    error_code number(6) not null,
+    error_message varchar2(4000),
+    date_of date not null
+
+);
+
+select * 
+from error_log
+
+create or replace trigger error_catch
+after insert on orders
+for each row
+declare
+   error_code number(6);
+   error_message varchar2(4000);
+   date_of date:=sysdate;
+   null_values exception;
+   prime_key exception;
+begin
+      error_code:=sqlcode;
+      error_message:='Error: '||sqlerrm;
+    if :new.customer_id is null or :new.order_date is null or :new.pay_type is null or :new.order_status is null or:new.cost_firstshipment is null or :new.cost_secondshipment is null then
+      raise null_values;
+     end if;
+    exception
+    when null_values then
+      insert into error_log values(-20034,'Error: Null values not allowed',date_of);
+       dbms_output.put_line('Error: Null values not allowed');
+      when others then 
+       insert into error_log values(error_code,error_message,date_of);
+       dbms_output.put_line(error_message);
+end;
+
+-- to test
+insert into orders values ('OID231', 'CUS001', '31-Dec-2018', 'Bank Wire', 'Ready to ship', 482, null);
+
+Querry 23 Calculate projected total costs
+
+create or replace function shipping_costs
+return number
+is
+   v_first number :=0;
+   v_second number :=0;
+   v_cost number;
+   cursor my_cur is
+      select sum(cost_firstshipment), sum(cost_secondshipment)
+      from orders;
+begin
+  open my_cur;
+  fetch my_cur into v_first,v_second;
+  close my_cur;
+  v_cost:=v_first +v_second;
+  return v_cost;
+end shipping_costs;
+
+create or replace function prod_cost
+return number
+is  
+   costs number;
+   cursor prod_cur is
+     select sum(p.cost*i.total_quantity)
+     from products p join items i
+     using (product_id);
+begin 
+  open prod_cur;
+  fetch prod_cur into costs;
+  close prod_cur;
+  return costs;
+end prod_cost;
+
+create or replace function salary_cost
+return number
+is  
+   costs number;
+   cursor sale_cur is
+    select sum(salary)
+	  from salaries; 
+begin 
+  open sale_cur;
+  fetch sale_cur into costs;
+  close sale_cur;
+  return costs;
+end salary_cost;
+
+-- final display
+
+declare 
+expenses number;
+begin
+   expenses := shipping_costs + prod_cost + salary_cost;
+   dbms_output.put_line('The total projected expenses of the company in salaries are ' || salary_cost || '$.');
+   dbms_output.put_line('The total projected expenses of the company in shipping are ' || shipping_costs || '$.');
+   dbms_output.put_line('The total projected expenses of the company in production are ' || prod_cost || '$.');
+   dbms_output.put_line('The total projected expenses of the company in production, shipping and salaries are ' || expenses || '$.');
+end;
