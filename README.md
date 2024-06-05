@@ -1,0 +1,1 @@
+This project has to do with the creation of a theoretical business and creating and maintaining a database. The code contains instructions that manipulate and dispaly data as required by the business professionals.
